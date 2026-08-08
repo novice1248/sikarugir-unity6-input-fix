@@ -49,6 +49,28 @@ Wine 10.0 に、本家の修正（MR !10120、Wine 11.3 に取り込み済み）
 素の Wine 10.0 からビルドしているため、Sikarugir のビルド番号によっては
 動作しない可能性があります。合わなければ uninstall.sh で戻してください。
 
+## 前提: Sikarugir をまだ入れていない場合
+
+このパッケージは「Sikarugir + Steam でゲームが起動するところまでできている」人向けです。
+Sikarugir 自体のセットアップは、この記事がスクショ付きで一番分かりやすいです:
+
+**[MacでSteam版ドラゴンクエストをSikarugir経由で動かす方法（Qiita / @yaju）](https://qiita.com/yaju/items/4608f9ede806957a696e)**
+
+要点だけ抜くと:
+
+1. Homebrew で Sikarugir を入れる
+   ```
+   brew install --cask --no-quarantine Sikarugir-App/sikarugir/sikarugir
+   ```
+2. `Sikarugir Creator.app` を起動し、「+」からエンジン **WS12WineSikarugir10.0_1** を
+   選んでラッパー（.app）を作る
+3. ラッパーの Tools → Winetricks で `steam` と `cjkfonts`（日本語表示用）を入れる
+4. Configuration タブで実行ファイルに `C:\Program Files (x86)\Steam\Steam.exe` を指定
+5. Steam にログインしてゲームをインストール → 起動確認
+
+ここまで済んでから、下の「使い方」で本パッケージを当ててください。
+（エンジンは必ず **WS12WineSikarugir10.0 系** を選ぶこと。本パッケージの対応対象です）
+
 ## 使い方
 
     ./install.sh /Applications/あなたのラッパー.app
