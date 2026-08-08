@@ -1,0 +1,169 @@
+diff --git a/dlls/user32/misc.c b/dlls/user32/misc.c
+index 6333fcb..8ec1f2b 100644
+--- a/dlls/user32/misc.c
++++ b/dlls/user32/misc.c
+@@ -526,10 +526,18 @@ BOOL WINAPI GetPointerType(UINT32 id, POINTER_INPUT_TYPE *type)
+ 
+ BOOL WINAPI GetPointerInfo(UINT32 id, POINTER_INFO *info)
+ {
++    POINTER_INFO frame = NtUserGetThreadInfo()->mouse_frame;
++
+     FIXME("(%d %p): stub\n", id, info);
+ 
+-    SetLastError(ERROR_INVALID_PARAMETER);
+-    return FALSE;
++    if (!id || !info || !frame.frameId || id != frame.pointerId)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
++
++    *info = frame;
++    return TRUE;
+ }
+ 
+ LRESULT WINAPI ImeWndProcA( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index ae7aeba..6cb5cce 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2514,14 +2514,22 @@ void toggle_caret( HWND hwnd )
+ }
+ 
+ 
++LONG enable_mouse_in_pointer = -1;
++
+ /**********************************************************************
+  *       NtUserEnableMouseInPointer    (win32u.@)
+  */
+ BOOL WINAPI NtUserEnableMouseInPointer( BOOL enable )
+ {
+-    FIXME( "enable %u stub!\n", enable );
+-    RtlSetLastWin32Error( ERROR_CALL_NOT_IMPLEMENTED );
+-    return FALSE;
++    FIXME( "enable %u semi-stub!\n", enable );
++
++    if (InterlockedCompareExchange( &enable_mouse_in_pointer, enable ? 1 : 0, -1 ) != -1)
++    {
++        RtlSetLastWin32Error( ERROR_ACCESS_DENIED );
++        return FALSE;
++    }
++
++    return TRUE;
+ }
+ 
+ /**********************************************************************
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index 2f1e14c..e4e5bc2 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2487,6 +2487,85 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+     msg->pt = point_phys_to_win_dpi( msg->hwnd, msg->pt );
+     set_thread_dpi_awareness_context( get_window_dpi_awareness_context( msg->hwnd ));
+ 
++    if (enable_mouse_in_pointer == 1 /* emulate pointer messages */)
++    {
++        struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
++        POINTER_INFO *info = &thread_info->mouse_frame;
++        LARGE_INTEGER frequency, counter;
++        DWORD message = 0;
++
++        NtQueryPerformanceCounter( &counter, &frequency );
++
++        info->pointerType = PT_MOUSE;
++        info->pointerId = 1;
++        info->sourceDevice = INVALID_HANDLE_VALUE;
++        info->historyCount = 1;
++        info->frameId++;
++        info->pointerFlags = 0x20000 | POINTER_MESSAGE_FLAG_PRIMARY;
++        info->hwndTarget = msg->hwnd;
++        info->ptPixelLocation.x = msg->pt.x;
++        info->ptPixelLocation.y = msg->pt.y;
++        info->ptHimetricLocation.x = msg->pt.x;
++        info->ptHimetricLocation.y = msg->pt.y;
++        info->ptPixelLocationRaw.x = msg->pt.x;
++        info->ptPixelLocationRaw.y = msg->pt.y;
++        info->ptHimetricLocationRaw.x = msg->pt.x;
++        info->ptHimetricLocationRaw.y = msg->pt.y;
++        info->dwTime = msg->time;
++        info->PerformanceCount = counter.QuadPart;
++        info->ButtonChangeType = 0;
++
++        switch (msg->message)
++        {
++        case WM_MOUSEMOVE:
++            message = WM_POINTERUPDATE;
++            info->pointerFlags |= POINTER_MESSAGE_FLAG_INRANGE;
++            break;
++        case WM_LBUTTONDOWN:
++        case WM_RBUTTONDOWN:
++        case WM_MBUTTONDOWN:
++        case WM_XBUTTONDOWN:
++            message = WM_POINTERDOWN;
++            info->pointerFlags |= POINTER_MESSAGE_FLAG_INRANGE | POINTER_MESSAGE_FLAG_INCONTACT;
++            if (msg->message == WM_LBUTTONDOWN)
++            {
++                info->pointerFlags |= POINTER_MESSAGE_FLAG_FIRSTBUTTON;
++                info->ButtonChangeType = POINTER_CHANGE_FIRSTBUTTON_DOWN;
++            }
++            if (msg->message == WM_RBUTTONDOWN)
++            {
++                info->pointerFlags |= POINTER_MESSAGE_FLAG_SECONDBUTTON;
++                info->ButtonChangeType = POINTER_CHANGE_SECONDBUTTON_DOWN;
++            }
++            if (msg->message == WM_MBUTTONDOWN)
++            {
++                info->pointerFlags |= POINTER_MESSAGE_FLAG_THIRDBUTTON;
++                info->ButtonChangeType = POINTER_CHANGE_THIRDBUTTON_DOWN;
++            }
++            break;
++        case WM_LBUTTONUP:
++        case WM_RBUTTONUP:
++        case WM_MBUTTONUP:
++        case WM_XBUTTONUP:
++            message = WM_POINTERUP;
++            if (msg->message == WM_LBUTTONUP) info->ButtonChangeType = POINTER_CHANGE_FIRSTBUTTON_UP;
++            if (msg->message == WM_RBUTTONUP) info->ButtonChangeType = POINTER_CHANGE_SECONDBUTTON_UP;
++            if (msg->message == WM_MBUTTONUP) info->ButtonChangeType = POINTER_CHANGE_THIRDBUTTON_UP;
++            break;
++        case WM_MOUSEWHEEL:
++            message = WM_POINTERWHEEL;
++            info->pointerFlags = HIWORD(msg->wParam);
++            break;
++        case WM_MOUSEHWHEEL:
++            message = WM_POINTERHWHEEL;
++            info->pointerFlags = HIWORD(msg->wParam);
++            break;
++        }
++
++        if (message) send_message( msg->hwnd, message, MAKELONG(info->pointerId, LOWORD(info->pointerFlags)),
++                                   MAKELONG(msg->pt.x, msg->pt.y) );
++    }
++
+     /* FIXME: is this really the right place for this hook? */
+     event.message = msg->message;
+     event.time    = msg->time;
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index f1e286b..4a76412 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -90,6 +90,7 @@ extern void unregister_imm_window( HWND hwnd );
+ /* input.c */
+ extern BOOL grab_pointer;
+ extern BOOL grab_fullscreen;
++extern LONG enable_mouse_in_pointer;
+ extern BOOL destroy_caret(void);
+ extern HWND get_active_window(void);
+ extern HWND get_capture(void);
+diff --git a/include/ntuser.h b/include/ntuser.h
+index 01fdd4b..5aeae41 100644
+--- a/include/ntuser.h
++++ b/include/ntuser.h
+@@ -110,6 +110,7 @@ struct ntuser_thread_info
+     UINT           default_imc;       /* default input context */
+     UINT64         client_imm;        /* client IMM thread info */
+     UINT64         wmchar_data;       /* client data for WM_CHAR mappings */
++    POINTER_INFO   mouse_frame;       /* mouse pointer frame when EnableMouseInPointer emulation is enabled */
+ };
+ 
+ static inline struct ntuser_thread_info *NtUserGetThreadInfo(void)
