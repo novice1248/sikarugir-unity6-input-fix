@@ -23,7 +23,9 @@ Wine は WM_POINTER を送らないため、入力が永久に届きません。
 タイトルの "PRESS ANY KEY" だけ反応するのは、そこだけ Unity の旧来型入力
 (`Input.anyKeyDown`) で拾っているためです。
 
-参考: WineHQ Bug #59415
+参考: WineHQ Bug #59415（上流では **RESOLVED FIXED**。Wine 本家は修正済みで、
+wine-10.0 ベースのエンジンにだけ残っている問題です。Sikarugir が 11.x エンジンを
+出せばこのパッケージは不要になります）
 
 ## 修正内容
 
