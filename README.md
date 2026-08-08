@@ -3,7 +3,7 @@
 > **English TL;DR** — Wine 10.0 stubs `NtUserEnableMouseInPointer()`, but Unity 6's
 > new Input System calls it and then listens for `WM_POINTER*` messages only (no
 > `WM_MOUSE*` fallback). Result: Unity 6 games render fine but accept no input past
-> the title screen. This package backports the Wine 11.13 pointer-input behaviour
+> the title screen. This package backports the upstream fix (Wine 11.3, MR !10120) 
 > into wine-10.0 (3 files: `user32.dll`, `win32u.dll`, `win32u.so` — graphics stack
 > untouched) for Sikarugir `WS12WineSikarugir10.0_*` engines.
 > Run `./install.sh /Applications/YourWrapper.app`; revert with `uninstall.sh`.
@@ -29,7 +29,8 @@ wine-10.0 ベースのエンジンにだけ残っている問題です。Sikarug
 
 ## 修正内容
 
-Wine 10.0 に3点のパッチを当ててビルドし直したものです。
+Wine 10.0 に、本家の修正（MR !10120、Wine 11.3 に取り込み済み）と同内容の
+3点のパッチを当ててビルドし直したものです。
 
 1. `NtUserEnableMouseInPointer()` を成功させる
 2. `process_mouse_message()` で WM_MOUSE 系を WM_POINTER 系に変換して送る

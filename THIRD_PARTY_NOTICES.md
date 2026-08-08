@@ -38,4 +38,6 @@ WM_MOUSE → WM_POINTER 変換の実装は下記を参考にしています。
 
 上流の同種の議論・実装:
 - WineHQ Bug #59415 (In Falsus demo cannot be interacted with)
-- Wine 11.13 以降では本家で実装済み
+  → RESOLVED FIXED: https://gitlab.winehq.org/wine/wine/-/merge_requests/10120
+    (Wine 11.3 に取り込み、11.7 でクローズ)
+- 関連: Bug #59429（修正後、リズムゲーム部分でカーソルが壊れる報告）
